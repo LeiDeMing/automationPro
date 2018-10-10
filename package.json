@@ -20,6 +20,8 @@
     "ejs": "^2.6.1",
     "express": "^4.16.3",
     "express-session": "^1.15.6",
+    "loader": "^2.1.1",
+    "loader-builder": "^2.6.1",
     "log4js": "^3.0.6",
     "md5": "^2.2.1",
     "mongodb": "^3.1.6",
