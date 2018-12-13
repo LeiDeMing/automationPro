@@ -43,7 +43,8 @@ app.listen(config.port)
 
 //sftp 上传服务
 let sftp = new Client();
-let upCountSize=0
+let upCountSize = 0
+let dirPath = []
 let fsOptions = {
     presistent: true,
     interval: 2000
@@ -60,6 +61,10 @@ const stataicPath = {
     data: {
         local: `${localPath}/data`,
         remote: `${remotePath}/static/data`
+    },
+    img: {
+        local: `${localPath}/img`,
+        remote: `${remotePath}/static/img`
     }
 }
 
@@ -71,6 +76,26 @@ const fsExistsSync = function (path) {
     }
     return true
 }
+const isDir = function (dir, remote, kind, morePath) {
+    const fileArr = fs.readdirSync(dir)
+    let newfileArr = fileArr.map((d, k) => {
+        let filePath = path.resolve(dir, d)
+        if (fs.statSync(filePath).isDirectory()) {
+            isDir(`${dir}/${d}`, remote, kind, d)
+        }
+        let completeLocalPath = `${dir}/${d}`;
+        let pathPath = path.resolve(dir, d)
+        return {
+            type: kind,
+            localPath: kind !== 'img' ? completeLocalPath : !fs.statSync(pathPath).isDirectory() ? fs.readFileSync(pathPath) : null,
+            remotePath: morePath ? `${remote}/${morePath}/${d}` : `${remote}/${d}`
+        }
+    })
+
+    dirPath = dirPath.concat(newfileArr)
+    console.log(dirPath)
+    return dirPath
+}
 
 const handleFilesPath = function (pathObj, kind) {
     let {
@@ -78,15 +103,8 @@ const handleFilesPath = function (pathObj, kind) {
         remote
     } = pathObj;
     if (fsExistsSync(local)) {
-        const filesArr = fs.readdirSync(local, 'utf8');
-        return newPath = filesArr.map((val, key) => {
-            let completeLocalPath = `${local}/${val}`;
-            return {
-                type: kind,
-                localPath: completeLocalPath,
-                remotePath: `${remote}/${val}`
-            }
-        })
+        const filesArr = isDir(local, remote, kind)
+        return filesArr
     }
     return null;
 }
@@ -98,17 +116,20 @@ const upLoadCore = function (files, index = 0) {
     }
     const promiseArr = splitArr.map((f, k) => {
         new Promise((resolve, reject) => {
-            sftp.fastPut(f.localPath, f.remotePath)
-                .then(() => {
-                    console.log('上传成功', index + k);
-                    resolve()
-                    ++upCountSize && upCountSize===files.length && process.exit();
-                    
-                })
-                .catch(() => {
-                    console.warn('上传失败', index + k)
-                    reject()
-                })
+            if (f.localPath) {
+                sftp.fastPut(f.localPath, f.remotePath)
+                    .then(() => {
+                        console.log('上传成功', index + k);
+                        resolve()
+                            ++upCountSize && upCountSize === files.length && console.log('-----上传总数----', index + k) && process.exit();
+
+                    })
+                    .catch(() => {
+                        console.warn('上传失败', index + k)
+                        reject()
+                    })
+            }
+
         })
     })
     Promise.all(promiseArr)
@@ -118,9 +139,11 @@ const uploadFile = function () {
     sftp.end()
     let files = []
     Object.keys(stataicPath).forEach(key => {
-        let fileArr=handleFilesPath(stataicPath[key], key)
+        let fileArr = handleFilesPath(stataicPath[key], key)
         fileArr && (files = files.concat(fileArr))
     })
+    // console.warn(files)
+    // console.log(files)
     sftp.connect(sfpOptions)
         .then(() => {
             upLoadCore(files)
