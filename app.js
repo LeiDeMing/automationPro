@@ -11,8 +11,12 @@ require('events').EventEmitter.prototype._maxListeners = 50;
 let config = require('./config');
 const logger = require('./common/logger');
 const webRouter = require('./web_router');
-const huada=require('./config/huada')
-let {localPath,remotePath,sfpOptions}=huada
+const huada = require('./config/huada')
+let {
+    localPath,
+    remotePath,
+    sfpOptions
+} = huada
 const staticDir = path.join(__dirname, 'public')
 
 app.set('view engine', 'ejs')
@@ -39,7 +43,7 @@ app.listen(config.port)
 
 //sftp 上传服务
 let sftp = new Client();
-
+let upCountSize=0
 let fsOptions = {
     presistent: true,
     interval: 2000
@@ -59,73 +63,71 @@ const stataicPath = {
     }
 }
 
+const fsExistsSync = function (path) {
+    try {
+        fs.accessSync(path, fs.F_OK)
+    } catch (e) {
+        return false
+    }
+    return true
+}
 
 const handleFilesPath = function (pathObj, kind) {
     let {
         local,
         remote
     } = pathObj;
-    const filesArr = fs.readdirSync(local, 'utf8');
-    return newPath = filesArr.map((val, key) => {
-        let completeLocalPath = `${local}/${val}`;
-        return {
-            type: kind,
-            localPath: completeLocalPath,
-            remotePath: `${remote}/${val}`
-        }
-    })
+    if (fsExistsSync(local)) {
+        const filesArr = fs.readdirSync(local, 'utf8');
+        return newPath = filesArr.map((val, key) => {
+            let completeLocalPath = `${local}/${val}`;
+            return {
+                type: kind,
+                localPath: completeLocalPath,
+                remotePath: `${remote}/${val}`
+            }
+        })
+    }
+    return null;
 }
 
-const uploadFile = function () {
-    let files = []
-    Object.keys(stataicPath).forEach(key => {
-        files = files.concat(handleFilesPath(stataicPath[key], key))
-    })
-    const splitArr=files.slice(0,10)
-    const splitArr2=files.slice(10,20)
-    const task = splitArr.map((file,iIndex) => {
-        sftp.connect(sfpOptions)
-        .then(() => {
-            sftp.fastPut(file.localPath, file.remotePath)
+const upLoadCore = function (files, index = 0) {
+    const splitArr = files.slice(index, index + 10)
+    if (splitArr.length >= 10) {
+        upLoadCore(files, index + 10)
+    }
+    const promiseArr = splitArr.map((f, k) => {
+        new Promise((resolve, reject) => {
+            sftp.fastPut(f.localPath, f.remotePath)
                 .then(() => {
-                    if(iIndex===9){
-                        setTimeout(()=>{
-                            splitArr2.map((file,iIndex) => {
-                                sftp.connect(sfpOptions)
-                                .then(() => {
-                                    sftp.fastPut(file.localPath, file.remotePath)
-                                        .then(() => {
-                                            console.log('上传成功',iIndex)
-                                        })
-                                        .catch((err) => {
-                                            // console.log(err, '上传失败')
-                                        })
-                                })
-                            })
-                        },1000)
-                    }
-                    console.log('上传成功',iIndex)
+                    console.log('上传成功', index + k);
+                    resolve()
+                    ++upCountSize && upCountSize===files.length && process.exit();
+                    
                 })
-                .catch((err) => {
-                    // console.log(err, '上传失败')
+                .catch(() => {
+                    console.warn('上传失败', index + k)
+                    reject()
                 })
         })
     })
-    
-    // Promise.all(first)
+    Promise.all(promiseArr)
 }
 
-uploadFile()
-// fs.watchFile(localPath,(curr,prev)=>{
-//     console.log(curr)
-//     sftp.connect(sfpOptions).then(() => {
-//         sftp.fastPut(`${localPath}/js/common.js`, `${remotePath}/demo.js`,(msg=>{
-//             console.log(msg)
-//         }));
-//         // return sftp.list(remotePath);
-//     }).then((data) => {
-//         // console.log(data, 'the data info');
-//     }).catch((err) => {
-//         console.log(err, 'catch error');
-//     });
+const uploadFile = function () {
+    sftp.end()
+    let files = []
+    Object.keys(stataicPath).forEach(key => {
+        let fileArr=handleFilesPath(stataicPath[key], key)
+        fileArr && (files = files.concat(fileArr))
+    })
+    sftp.connect(sfpOptions)
+        .then(() => {
+            upLoadCore(files)
+        })
+}
+// fs.watch(localPath.replace('/static',''), (event, filename) => {
+//     console.log(filename)
+//     uploadFile()
 // })
+uploadFile()
