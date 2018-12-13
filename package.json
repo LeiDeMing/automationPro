@@ -20,6 +20,7 @@
     "ejs": "^2.6.1",
     "express": "^4.16.3",
     "express-session": "^1.15.6",
+    "ftp": "^0.3.10",
     "loader": "^2.1.1",
     "loader-builder": "^2.6.1",
     "log4js": "^3.0.6",
@@ -27,7 +28,8 @@
     "mongodb": "^3.1.6",
     "mongoose": "^5.3.0",
     "multiparty": "^4.2.1",
-    "serve-favicon": "^2.5.0"
+    "serve-favicon": "^2.5.0",
+    "ssh2-sftp-client": "^2.4.2"
   },
   "devDependencies": {
     "errorhandler": "^1.5.0"
