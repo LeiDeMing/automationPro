@@ -11,8 +11,8 @@ require('events').EventEmitter.prototype._maxListeners = 50;
 let config = require('./config');
 const logger = require('./common/logger');
 const webRouter = require('./web_router');
-import {localPath,remotePath,sfpOptions} from './config/huada'
-
+const huada=require('./config/huada')
+let {localPath,remotePath,sfpOptions}=huada
 const staticDir = path.join(__dirname, 'public')
 
 app.set('view engine', 'ejs')
