@@ -7,11 +7,11 @@ let env=process.env.NODE_ENV;
 
 log4js.configure({
     appenders: { cheese: { type: 'file', filename: path.join(config.log_dir,'cheese.log') } },
-    categories: { default: { appenders: ['cheese'], level: 'error' } }
+    categories: { default: { appenders: ['cheese'], level: 'debug' } }
   });
 
 let logger=log4js.getLogger('cheese');
-logger.level ='error'
+logger.level ='debug'
 
 module.exports=logger;
 

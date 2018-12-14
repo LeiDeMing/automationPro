@@ -24,7 +24,6 @@ app.set('view engine', 'ejs')
 app.use(favicon(`${__dirname}/favicon.ico`))
 app.use('/public', express.static(staticDir))
 
-
 // app.use('/',webRouter)
 // if(config.debug){
 //     app.use(errorhandler())
@@ -39,7 +38,6 @@ app.listen(config.port)
 //     logger.info('automation listening on port ',config.port);
 //     logger.info(`You can debug your app with http://${config.host}:${config.port}`)
 // });
-
 
 //sftp 上传服务
 let sftp = new Client();
@@ -80,20 +78,27 @@ const isDir = function (dir, remote, kind, morePath) {
     const fileArr = fs.readdirSync(dir)
     let newfileArr = fileArr.map((d, k) => {
         let filePath = path.resolve(dir, d)
+        let recursizeDir = `${morePath}/${d}`
         if (fs.statSync(filePath).isDirectory()) {
-            isDir(`${dir}/${d}`, remote, kind, d)
+            checkDir({
+                dir:{
+                    remote:remote+recursizeDir
+                }
+            })
+
+            isDir(`${dir}/${d}`, remote, kind, recursizeDir)
         }
         let completeLocalPath = `${dir}/${d}`;
-        let pathPath = path.resolve(dir, d)
+        let pathPath = path.resolve(dir, d);
         return {
             type: kind,
-            localPath: kind !== 'img' ? completeLocalPath : !fs.statSync(pathPath).isDirectory() ? fs.readFileSync(pathPath) : null,
-            remotePath: morePath ? `${remote}/${morePath}/${d}` : `${remote}/${d}`
+            // localPath: kind !== 'img' ? completeLocalPath : !fs.statSync(pathPath).isDirectory() ? fs.readFileSync(pathPath) : null,
+            localPath: !fs.statSync(pathPath).isDirectory() ? pathPath : null,
+            remotePath: morePath ? `${remote}${morePath}/${d}` : `${remote}/${d}`
         }
     })
 
     dirPath = dirPath.concat(newfileArr)
-    console.log(dirPath)
     return dirPath
 }
 
@@ -103,13 +108,16 @@ const handleFilesPath = function (pathObj, kind) {
         remote
     } = pathObj;
     if (fsExistsSync(local)) {
-        const filesArr = isDir(local, remote, kind)
+        const filesArr = isDir(local, remote, kind, '')
         return filesArr
     }
     return null;
 }
 
 const upLoadCore = function (files, index = 0) {
+    if(!files){
+        logger.warn('----本地目录为空----')
+    }
     const splitArr = files.slice(index, index + 10)
     if (splitArr.length >= 10) {
         upLoadCore(files, index + 10)
@@ -117,15 +125,16 @@ const upLoadCore = function (files, index = 0) {
     const promiseArr = splitArr.map((f, k) => {
         new Promise((resolve, reject) => {
             if (f.localPath) {
+                // let reg=new RegExp(/\.(png|jpe?g|gif|svg|css|js|map)(\?.*)?$/,'gi')
+
                 sftp.fastPut(f.localPath, f.remotePath)
                     .then(() => {
-                        console.log('上传成功', index + k);
+                        logger.info('上传成功', index + k)
+                        ++upCountSize && upCountSize === files.length && console.log('-----上传总数----', upCountSize) && process.exit();
                         resolve()
-                            ++upCountSize && upCountSize === files.length && console.log('-----上传总数----', index + k) && process.exit();
-
                     })
-                    .catch(() => {
-                        console.warn('上传失败', index + k)
+                    .catch((err) => {
+                        logger.info('上传失败', index + k, err)
                         reject()
                     })
             }
@@ -135,20 +144,40 @@ const upLoadCore = function (files, index = 0) {
     Promise.all(promiseArr)
 }
 
+const checkDir = function (pathObj) {
+    Object.keys(pathObj).forEach((type, index) => {
+        const {
+            remote
+        } = pathObj[type]
+        sftp.stat(remote)
+            .then(() => {
+                logger.info(`-${remote}　-　目录已存在\n`)
+            })
+            .catch((err) => {
+                sftp.mkdir(remote)
+                logger.info(`-${remote}　-　新建目录成功\n`)
+            })
+    })
+}
+
 const uploadFile = function () {
     sftp.end()
     let files = []
-    Object.keys(stataicPath).forEach(key => {
-        let fileArr = handleFilesPath(stataicPath[key], key)
-        fileArr && (files = files.concat(fileArr))
-    })
-    // console.warn(files)
-    // console.log(files)
     sftp.connect(sfpOptions)
         .then(() => {
+            logger.info('------------sftp连接成功！！！-----------\n')
+            checkDir(stataicPath);
+            Object.keys(stataicPath).forEach(key => {
+                let fileArr = handleFilesPath(stataicPath[key], key)
+                fileArr && (files = files.concat(fileArr))
+            })
             upLoadCore(files)
         })
+        .catch(err => {
+            logger.error('------sftp连接错误------', err)
+        })
 }
+
 // fs.watch(localPath.replace('/static',''), (event, filename) => {
 //     console.log(filename)
 //     uploadFile()
