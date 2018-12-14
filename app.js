@@ -76,7 +76,7 @@ const fsExistsSync = function (path) {
 }
 const isDir = function (dir, remote, kind, morePath) {
     const fileArr = fs.readdirSync(dir)
-    let newfileArr = fileArr.map((d, k) => {
+    let newfileArr = fileArr.filter((d, k) => {
         let filePath = path.resolve(dir, d)
         let recursizeDir = `${morePath}/${d}`
         if (fs.statSync(filePath).isDirectory()) {
@@ -129,11 +129,13 @@ const upLoadCore = function (files, index = 0) {
 
                 sftp.fastPut(f.localPath, f.remotePath)
                     .then(() => {
+                        console.log('上传成功', index + k)
                         logger.info('上传成功', index + k)
                         ++upCountSize && upCountSize === files.length && console.log('-----上传总数----', upCountSize) && process.exit();
                         resolve()
                     })
                     .catch((err) => {
+                        console.log('上传失败', index + k, err)
                         logger.info('上传失败', index + k, err)
                         reject()
                     })
@@ -151,10 +153,12 @@ const checkDir = function (pathObj) {
         } = pathObj[type]
         sftp.stat(remote)
             .then(() => {
+                console.log(`-${remote}　-　目录已存在\n`)
                 logger.info(`-${remote}　-　目录已存在\n`)
             })
             .catch((err) => {
                 sftp.mkdir(remote)
+                console.log(`-${remote}　-　新建目录成功\n`)
                 logger.info(`-${remote}　-　新建目录成功\n`)
             })
     })
@@ -165,15 +169,18 @@ const uploadFile = function () {
     let files = []
     sftp.connect(sfpOptions)
         .then(() => {
+            console.log('------------sftp连接成功！！！-----------\n')
             logger.info('------------sftp连接成功！！！-----------\n')
             checkDir(stataicPath);
             Object.keys(stataicPath).forEach(key => {
                 let fileArr = handleFilesPath(stataicPath[key], key)
                 fileArr && (files = files.concat(fileArr))
             })
+            console.log(files)
             upLoadCore(files)
         })
         .catch(err => {
+            console.log('------sftp连接错误------', err)
             logger.error('------sftp连接错误------', err)
         })
 }
